@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import io
 import json
 import tempfile
+import zipfile
 from pathlib import Path
 
 import pandas as pd
@@ -94,19 +96,74 @@ def scan_mri_pet() -> None:
     st.session_state["compare_loaded"] = True
 
 
+def clear_compare_state() -> None:
+    st.session_state.pop("df_mri", None)
+    st.session_state.pop("df_pet", None)
+    st.session_state.pop("compare_loaded", None)
+
+
 def scan_folder(path: Path, label: str) -> None:
+    clear_compare_state()
     st.session_state["df"] = load_dicom_folder(path)
     st.session_state["source_name"] = label
     st.session_state["source_path"] = str(path)
 
 
+def _write_uploaded_files(files, tmp: Path) -> int:
+    for file in files:
+        dest = tmp / file.name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(file.getvalue())
+    return len(files)
+
+
+def _extract_zip_to_dir(zip_file, dest: Path) -> None:
+    dest.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(io.BytesIO(zip_file.getvalue())) as zf:
+        for member in zf.infolist():
+            if member.is_dir() or member.filename.endswith("/"):
+                continue
+            target = dest / member.filename
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(zf.read(member.filename))
+
+
 def scan_upload(files) -> None:
     tmp = Path(tempfile.mkdtemp(prefix="dicom_upload_"))
-    for file in files:
-        (tmp / file.name).write_bytes(file.getvalue())
+    count = _write_uploaded_files(files, tmp)
+    clear_compare_state()
     st.session_state["df"] = load_dicom_folder(tmp)
-    st.session_state["source_name"] = f"Upload ({len(files)} files)"
+    st.session_state["source_name"] = f"Upload ({count} files)"
     st.session_state["source_path"] = str(tmp)
+
+
+def scan_upload_folder_zip(zip_file) -> None:
+    tmp = Path(tempfile.mkdtemp(prefix="dicom_folder_"))
+    _extract_zip_to_dir(zip_file, tmp)
+    clear_compare_state()
+    df = load_dicom_folder(tmp)
+    if df.empty:
+        raise ValueError("No DICOM files found in the uploaded folder.")
+    st.session_state["df"] = df
+    st.session_state["source_name"] = f"Folder upload ({zip_file.name})"
+    st.session_state["source_path"] = str(tmp)
+
+
+def scan_upload_mri_pet_zips(mri_zip, pet_zip) -> None:
+    tmp = Path(tempfile.mkdtemp(prefix="dicom_mri_pet_"))
+    mri_dir = tmp / "mri"
+    pet_dir = tmp / "pet"
+    _extract_zip_to_dir(mri_zip, mri_dir)
+    _extract_zip_to_dir(pet_zip, pet_dir)
+    mri, pet, combined = load_mri_pet_pair(mri_dir, pet_dir)
+    if mri.empty and pet.empty:
+        raise ValueError("No DICOM files found in the uploaded MRI or PET folders.")
+    st.session_state["df_mri"] = mri
+    st.session_state["df_pet"] = pet
+    st.session_state["df"] = combined
+    st.session_state["source_name"] = "MRI + PET folder upload"
+    st.session_state["source_path"] = f"{mri_zip.name} + {pet_zip.name}"
+    st.session_state["compare_loaded"] = True
 
 
 def filter_df(df: pd.DataFrame) -> pd.DataFrame:
@@ -140,7 +197,18 @@ st.markdown(
 
 with st.sidebar:
     st.header("Load data")
-    source = st.radio("Source", ["Preset", "Folder path", "Upload"], label_visibility="collapsed")
+    source = st.radio(
+        "Source",
+        ["Preset", "Folder path", "Upload files", "Upload folder"],
+        label_visibility="collapsed",
+    )
+
+    uploads = None
+    folder_zip = None
+    mri_zip = None
+    pet_zip = None
+    path = None
+    preset = None
 
     if source == "Preset":
         preset = st.selectbox("Dataset", list(PRESETS.keys()), index=0)
@@ -153,20 +221,54 @@ with st.sidebar:
             st.caption(path)
     elif source == "Folder path":
         path = Path(st.text_input("Path", PRESETS["Brain Tumor MRI"]))
+    elif source == "Upload files":
+        uploads = st.file_uploader(
+            "Select .dcm files",
+            type=["dcm", "dicom"],
+            accept_multiple_files=True,
+            key="upload_dicom_files",
+        )
+        st.caption("Tip: on Mac, select all files inside the folder in Finder (Cmd+A).")
     else:
-        uploads = st.file_uploader("Upload .dcm files", type=["dcm", "dicom"], accept_multiple_files=True)
+        folder_mode = st.radio(
+            "Folder upload type",
+            ["Single DICOM folder", "MRI + PET (2 folders)"],
+            horizontal=True,
+            key="upload_folder_mode",
+        )
+        if folder_mode == "Single DICOM folder":
+            folder_zip = st.file_uploader(
+                "Upload folder as ZIP",
+                type=["zip"],
+                key="upload_folder_zip",
+            )
+            st.caption("Right-click your DICOM folder → **Compress** (Mac) or **Send to → Compressed folder** (Windows).")
+        else:
+            mri_zip = st.file_uploader("MRI folder (ZIP)", type=["zip"], key="upload_mri_zip")
+            pet_zip = st.file_uploader("PET folder (ZIP)", type=["zip"], key="upload_pet_zip")
+            st.caption("Zip each study folder separately, then upload both ZIP files.")
 
     c1, c2 = st.columns(2)
     if c1.button("Scan", type="primary", use_container_width=True):
         try:
-            if source == "Upload":
+            if source == "Upload files":
                 if uploads:
                     scan_upload(uploads)
                 else:
                     st.error("Upload files first.")
+            elif source == "Upload folder":
+                if folder_mode == "Single DICOM folder":
+                    if folder_zip:
+                        scan_upload_folder_zip(folder_zip)
+                    else:
+                        st.error("Upload a ZIP of your DICOM folder first.")
+                elif mri_zip and pet_zip:
+                    scan_upload_mri_pet_zips(mri_zip, pet_zip)
+                else:
+                    st.error("Upload both MRI and PET folder ZIP files.")
             elif source == "Preset" and preset == "MRI + PET (both)":
                 scan_mri_pet()
-            elif path.is_dir():
+            elif path is not None and path.is_dir():
                 scan_folder(path, str(path))
             else:
                 st.error("Folder not found.")
@@ -191,7 +293,10 @@ with st.sidebar:
 
 df = st.session_state.get("df", pd.DataFrame())
 if df.empty:
-    st.info("Click **Scan** or **Reload MRI+PET** in the sidebar.")
+    st.info(
+        "Load data in the sidebar: **Upload folder** (ZIP) works on Streamlit Cloud, "
+        "or use **Upload files** / **Folder path** locally. Then click **Scan**."
+    )
     st.stop()
 
 df = filter_df(df)
