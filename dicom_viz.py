@@ -88,6 +88,15 @@ def chart_slice_timeline(df: pd.DataFrame) -> go.Figure:
     return fig
 
 
+def _clean_label(series: pd.Series) -> pd.Series:
+    cleaned = series.fillna("Unknown").astype(str).str.strip()
+    return cleaned.replace({"": "Unknown", "nan": "Unknown", "None": "Unknown", "<NA>": "Unknown"})
+
+
+def _hierarchy_label(series: pd.Series, prefix: str) -> pd.Series:
+    return prefix + _clean_label(series)
+
+
 def chart_image_dimensions(df: pd.DataFrame) -> go.Figure:
     plot_df = df.copy()
     plot_df["rows_num"] = pd.to_numeric(plot_df.get("rows"), errors="coerce")
@@ -107,10 +116,31 @@ def chart_image_dimensions(df: pd.DataFrame) -> go.Figure:
 
 
 def chart_manufacturer_treemap(df: pd.DataFrame) -> go.Figure:
-    if "manufacturer" not in df.columns:
+    if "manufacturer" not in df.columns or df.empty:
         return go.Figure()
-    plot_df = df.groupby(["manufacturer", "modality", "body_part_inferred"], dropna=False).size().reset_index(name="count")
-    fig = px.treemap(plot_df, path=["manufacturer", "modality", "body_part_inferred"], values="count", title="Manufacturer → modality → body part")
+
+    body_col = "body_part_inferred" if "body_part_inferred" in df.columns else "body_part_examined"
+    agg_cols = ["manufacturer", "modality"]
+    if body_col in df.columns:
+        agg_cols.append(body_col)
+
+    plot_df = df.groupby(agg_cols, dropna=False).size().reset_index(name="count")
+    plot_df["manufacturer"] = _clean_label(plot_df["manufacturer"])
+    plot_df["level_modality"] = _hierarchy_label(plot_df["modality"], "Modality · ")
+    path = ["manufacturer", "level_modality"]
+    title = "Manufacturer → modality"
+
+    if body_col in plot_df.columns:
+        plot_df["level_body"] = _hierarchy_label(plot_df[body_col], "Body · ")
+        path.append("level_body")
+        title = "Manufacturer → modality → body part"
+
+    try:
+        fig = px.treemap(plot_df, path=path, values="count", title=title)
+    except ValueError:
+        fallback = plot_df.groupby("manufacturer", as_index=False)["count"].sum()
+        fig = px.treemap(fallback, path=["manufacturer"], values="count", title="Manufacturer file counts")
+
     fig.update_layout(height=420, margin=dict(t=50, b=20, l=20, r=20))
     return fig
 
@@ -133,10 +163,16 @@ def chart_combined_dataset_bar(df: pd.DataFrame) -> go.Figure:
 
 
 def chart_combined_modality_sunburst(df: pd.DataFrame) -> go.Figure:
-    if "dataset" not in df.columns:
+    if "dataset" not in df.columns or df.empty:
         return go.Figure()
     plot_df = df.groupby(["dataset", "modality"], dropna=False).size().reset_index(name="count")
-    fig = px.sunburst(plot_df, path=["dataset", "modality"], values="count", title="Dataset → modality")
+    plot_df["dataset"] = _clean_label(plot_df["dataset"])
+    plot_df["level_modality"] = _hierarchy_label(plot_df["modality"], "Modality · ")
+    try:
+        fig = px.sunburst(plot_df, path=["dataset", "level_modality"], values="count", title="Dataset → modality")
+    except ValueError:
+        fallback = plot_df.groupby("dataset", as_index=False)["count"].sum()
+        fig = px.sunburst(fallback, path=["dataset"], values="count", title="Files per dataset")
     fig.update_layout(height=380, margin=dict(t=50, b=20, l=20, r=20))
     return fig
 
