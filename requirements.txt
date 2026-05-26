@@ -1,0 +1,6 @@
+pandas>=2.0
+pydicom>=2.4
+streamlit>=1.28
+plotly>=5.18
+openslide-bin>=4.0; platform_system != "Linux"
+openslide-python>=1.3
