@@ -178,6 +178,9 @@ def load_mri_pet_pair(mri_folder: str | Path, pet_folder: str | Path) -> tuple[p
     pet["dataset"] = "PET"
     combined = pd.concat([mri, pet], ignore_index=True)
     return mri, pet, combined
+
+
+def assignment_table(df: pd.DataFrame) -> pd.DataFrame:
     """Required coursework columns with cleaned values."""
     if df.empty:
         return pd.DataFrame()

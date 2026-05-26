@@ -219,29 +219,29 @@ with tabs[0]:
     m6.metric("Scan dates", summary["unique_acquisition_dates"])
 
     if both_loaded:
-        st.plotly_chart(chart_combined_dataset_bar(st.session_state["df"]), use_container_width=True)
-        st.plotly_chart(chart_combined_modality_sunburst(st.session_state["df"]), use_container_width=True)
+        st.plotly_chart(chart_combined_dataset_bar(st.session_state["df"]), use_container_width=True, key="overview_combined_bar")
+        st.plotly_chart(chart_combined_modality_sunburst(st.session_state["df"]), use_container_width=True, key="overview_combined_sunburst")
 
     r1c1, r1c2, r1c3 = st.columns(3)
     with r1c1:
-        st.plotly_chart(chart_modality_donut(summary), use_container_width=True)
+        st.plotly_chart(chart_modality_donut(summary), use_container_width=True, key="overview_modality_donut")
     with r1c2:
-        st.plotly_chart(chart_body_part_bar(summary), use_container_width=True)
+        st.plotly_chart(chart_body_part_bar(summary), use_container_width=True, key="overview_body_part_bar")
     with r1c3:
         q_preview = completeness_report(df)
-        st.plotly_chart(chart_overall_score(q_preview), use_container_width=True)
+        st.plotly_chart(chart_overall_score(q_preview), use_container_width=True, key="overview_completeness_gauge")
 
     r2c1, r2c2 = st.columns(2)
     with r2c1:
-        st.plotly_chart(chart_slice_timeline(df), use_container_width=True)
+        st.plotly_chart(chart_slice_timeline(df), use_container_width=True, key="overview_slice_timeline")
     with r2c2:
-        st.plotly_chart(chart_scan_dates(df), use_container_width=True)
+        st.plotly_chart(chart_scan_dates(df), use_container_width=True, key="overview_scan_dates")
 
     r3c1, r3c2 = st.columns(2)
     with r3c1:
-        st.plotly_chart(chart_image_dimensions(df), use_container_width=True)
+        st.plotly_chart(chart_image_dimensions(df), use_container_width=True, key="overview_image_dims")
     with r3c2:
-        st.plotly_chart(chart_manufacturer_treemap(df), use_container_width=True)
+        st.plotly_chart(chart_manufacturer_treemap(df), use_container_width=True, key="overview_treemap")
 
     st.success(
         f"Loaded **{summary['total_files']}** files from `{st.session_state.get('source_name', 'dataset')}`. "
@@ -254,19 +254,19 @@ with tabs[1]:
 
     v1, v2 = st.columns(2)
     with v1:
-        st.plotly_chart(chart_completeness_heatmap(q), use_container_width=True)
-        st.plotly_chart(chart_modality_donut(summary), use_container_width=True)
+        st.plotly_chart(chart_completeness_heatmap(q), use_container_width=True, key="viz_completeness_heatmap")
+        st.plotly_chart(chart_modality_donut(summary), use_container_width=True, key="viz_modality_donut")
     with v2:
-        st.plotly_chart(chart_completeness_radial(q), use_container_width=True)
-        st.plotly_chart(chart_body_part_bar(summary), use_container_width=True)
+        st.plotly_chart(chart_completeness_radial(q), use_container_width=True, key="viz_completeness_radial")
+        st.plotly_chart(chart_body_part_bar(summary), use_container_width=True, key="viz_body_part_bar")
 
     v3, v4 = st.columns(2)
     with v3:
-        st.plotly_chart(chart_slice_timeline(df), use_container_width=True)
+        st.plotly_chart(chart_slice_timeline(df), use_container_width=True, key="viz_slice_timeline")
     with v4:
-        st.plotly_chart(chart_image_dimensions(df), use_container_width=True)
+        st.plotly_chart(chart_image_dimensions(df), use_container_width=True, key="viz_image_dims")
 
-    st.plotly_chart(chart_manufacturer_treemap(df), use_container_width=True)
+    st.plotly_chart(chart_manufacturer_treemap(df), use_container_width=True, key="viz_treemap")
 
     st.markdown("### Slice gallery")
     if both_loaded:
@@ -292,7 +292,7 @@ with tabs[1]:
                     except Exception:
                         st.caption(row["file_name"])
     else:
-        gallery_n = st.slider("Number of thumbnails", 4, min(24, len(df)), 12)
+        gallery_n = st.slider("Number of thumbnails", 4, min(24, len(df)), 12, key="viz_gallery_n")
         cols = st.columns(4)
         for i, (_, row) in enumerate(df.head(gallery_n).iterrows()):
             with cols[i % 4]:
@@ -307,11 +307,11 @@ with tabs[2]:
     st.dataframe(assign_df, use_container_width=True, height=360)
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.plotly_chart(chart_modality_donut(summary), use_container_width=True)
+        st.plotly_chart(chart_modality_donut(summary), use_container_width=True, key="assign_modality_donut")
     with c2:
-        st.plotly_chart(chart_body_part_bar(summary), use_container_width=True)
+        st.plotly_chart(chart_body_part_bar(summary), use_container_width=True, key="assign_body_part_bar")
     with c3:
-        st.plotly_chart(chart_scan_dates(df), use_container_width=True)
+        st.plotly_chart(chart_scan_dates(df), use_container_width=True, key="assign_scan_dates")
 
 with tabs[3]:
     show_cols = [
@@ -323,13 +323,13 @@ with tabs[3]:
     show_cols = [c for c in show_cols if c in df.columns]
     st.dataframe(df[show_cols], use_container_width=True, height=380)
 
-    pick = st.selectbox("Full DICOM tag browser", df["file_name"].tolist())
+    pick = st.selectbox("Full DICOM tag browser", df["file_name"].tolist(), key="explorer_file_pick")
     tag_path = df.loc[df["file_name"] == pick, "file_path"].iloc[0]
     st.dataframe(read_all_dicom_tags(tag_path), use_container_width=True, height=360)
 
 with tabs[4]:
     if both_loaded:
-        view_set = st.radio("View slices from", ["MRI", "PET", "All combined"], horizontal=True)
+        view_set = st.radio("View slices from", ["MRI", "PET", "All combined"], horizontal=True, key="viewer_dataset")
         if view_set == "MRI":
             view_df = df_mri
         elif view_set == "PET":
@@ -340,14 +340,14 @@ with tabs[4]:
         view_df = df
 
     sorted_names = view_df["file_name"].tolist()
-    idx = st.slider("Slice", 0, max(len(sorted_names) - 1, 0), 0)
+    idx = st.slider("Slice", 0, max(len(sorted_names) - 1, 0), 0, key="viewer_slice_idx")
     chosen = sorted_names[idx]
     path = view_df.loc[view_df["file_name"] == chosen, "file_path"].iloc[0]
 
     try:
         _, ds, default_c, default_w = load_dicom_image(path)
-        wc = st.slider("Window center", float(default_c - 1000), float(default_c + 1000), float(default_c))
-        ww = st.slider("Window width", 1.0, float(max(default_w * 4, 500)), float(default_w))
+        wc = st.slider("Window center", float(default_c - 1000), float(default_c + 1000), float(default_c), key="viewer_window_center")
+        ww = st.slider("Window width", 1.0, float(max(default_w * 4, 500)), float(default_w), key="viewer_window_width")
         img, _, _, _ = load_dicom_image(path, wc, ww)
     except Exception as exc:
         st.error(str(exc))
@@ -357,7 +357,7 @@ with tabs[4]:
     with v1:
         if img is not None:
             st.image(img, caption=f"{chosen} · slice {idx + 1}/{len(sorted_names)}", use_container_width=True)
-            st.plotly_chart(chart_pixel_histogram(path), use_container_width=True)
+            st.plotly_chart(chart_pixel_histogram(path), use_container_width=True, key="viewer_pixel_histogram")
     with v2:
         row = view_df[view_df["file_name"] == chosen].iloc[0]
         st.markdown("**Slice info**")
@@ -376,14 +376,14 @@ with tabs[5]:
     if not both_loaded:
         st.warning("Reload **MRI+PET** in the sidebar to compare both datasets.")
     else:
-        st.plotly_chart(chart_mri_pet_comparison(df_mri, df_pet), use_container_width=True)
+        st.plotly_chart(chart_mri_pet_comparison(df_mri, df_pet), use_container_width=True, key="compare_bar")
         c1, c2 = st.columns(2)
         with c1:
-            st.plotly_chart(chart_mri_pet_modality_pies(df_mri, df_pet), use_container_width=True)
+            st.plotly_chart(chart_mri_pet_modality_pies(df_mri, df_pet), use_container_width=True, key="compare_pies")
         with c2:
-            st.plotly_chart(chart_scan_dates(df_mri), use_container_width=True)
+            st.plotly_chart(chart_scan_dates(df_mri), use_container_width=True, key="compare_mri_dates")
             st.caption("MRI scan dates")
-            st.plotly_chart(chart_scan_dates(df_pet), use_container_width=True)
+            st.plotly_chart(chart_scan_dates(df_pet), use_container_width=True, key="compare_pet_dates")
             st.caption("PET scan dates")
         st.dataframe(compare_summaries(df_mri, "MRI", df_pet, "PET"), use_container_width=True)
         c1, c2 = st.columns(2)
@@ -399,13 +399,14 @@ with tabs[6]:
     st.dataframe(q, use_container_width=True, height=280)
     c1, c2 = st.columns(2)
     with c1:
-        st.plotly_chart(chart_completeness_heatmap(q), use_container_width=True)
+        st.plotly_chart(chart_completeness_heatmap(q), use_container_width=True, key="quality_heatmap")
     with c2:
-        st.plotly_chart(chart_completeness_radial(q), use_container_width=True)
+        st.plotly_chart(chart_completeness_radial(q), use_container_width=True, key="quality_radial")
     st.plotly_chart(
         px.bar(q.sort_values("completeness_pct"), x="completeness_pct", y="field", orientation="h",
                title="Metadata completeness (%)", color="completeness_pct", color_continuous_scale="Teal"),
         use_container_width=True,
+        key="quality_bar",
     )
 
 with tabs[7]:
@@ -414,12 +415,14 @@ with tabs[7]:
         assign_df.to_csv(index=False).encode("utf-8"),
         "dicom_assignment_table.csv",
         use_container_width=True,
+        key="export_assignment_csv",
     )
     st.download_button(
         "Download full metadata CSV",
         df.drop(columns=["file_path"], errors="ignore").to_csv(index=False).encode("utf-8"),
         "dicom_full_metadata.csv",
         use_container_width=True,
+        key="export_full_csv",
     )
     st.subheader("Paste-ready report")
     mri_line = f"MRI files: {len(df_mri)} (modality MR, date {df_mri['acquisition_date_fmt'].iloc[0]})" if both_loaded else ""
